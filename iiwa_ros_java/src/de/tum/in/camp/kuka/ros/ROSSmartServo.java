@@ -1,8 +1,8 @@
 /**  
  * Copyright (C) 2016-2017 Salvatore Virga - salvo.virga@tum.de, Marco Esposito - marco.esposito@tum.de
- * Technische Universität München
+ * Technische UniversitÃ¤t MÃ¼nchen
  * Chair for Computer Aided Medical Procedures and Augmented Reality
- * Fakultät für Informatik / I16, Boltzmannstraße 3, 85748 Garching bei München, Germany
+ * FakultÃ¤t fÃ¼r Informatik / I16, BoltzmannstraÃŸe 3, 85748 Garching bei MÃ¼nchen, Germany
  * http://campar.in.tum.de
  * All rights reserved.
  * 
@@ -33,6 +33,7 @@ import iiwa_msgs.TimeToDestinationRequest;
 import iiwa_msgs.TimeToDestinationResponse;
 
 import java.net.URI;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -51,6 +52,8 @@ import com.kuka.roboticsAPI.motionModel.controlModeModel.CartesianSineImpedanceC
 import com.kuka.roboticsAPI.motionModel.controlModeModel.IMotionControlMode;
 import com.kuka.roboticsAPI.motionModel.controlModeModel.JointImpedanceControlMode;
 import com.kuka.roboticsAPI.motionModel.controlModeModel.PositionControlMode;
+import static com.kuka.roboticsAPI.motionModel.BasicMotions.positionHold;
+//import com.kuka.roboticsAPI.motionModel.PositionHold;
 
 /*
  * This application allows to command the robot using SmartServo motions.
@@ -95,7 +98,11 @@ public class ROSSmartServo extends ROSBaseApplication {
 				try {
 					if (isSameControlMode(motion.getMode(), req.getControlMode())) { // We can just change the parameters if the control strategy is the same.
 						if (!(motion.getMode() instanceof PositionControlMode)) { // We are in PositioControlMode and the request was for the same mode, there are no parameters to change.
+							motion.getRuntime().setDestination(robot.getCurrentJointPosition());
+
 							motion.getRuntime().changeControlModeSettings(buildMotionControlMode(req));
+
+							motion.getRuntime().setDestination(robot.getCurrentJointPosition());
 						}
 					} else {
 						switchSmartServoMotion(req);
@@ -342,6 +349,7 @@ public class ROSSmartServo extends ROSBaseApplication {
 		mot.setJointVelocityRel(jointVelocity);
 		mot.setJointAccelerationRel(jointAcceleration);
 		mot.overrideJointAcceleration(overrideJointAcceleration);
+		mot.setSpeedTimeoutAfterGoalReach(0.1);//debug: add for avoiding speed limit?
 		return mot;
 	}	
 	
@@ -353,30 +361,83 @@ public class ROSSmartServo extends ROSBaseApplication {
 	private void switchSmartServoMotion(iiwa_msgs.ConfigureSmartServoRequest request) {
 		configureSmartServoLock.lock();
 
+		IMotionControlMode switch_cm = null;
+
 		SmartServo oldmotion = motion;
-		if (tool != null) {
-			ServoMotion.validateForImpedanceMode(tool);
+
+		try
+		{
+			if (tool != null) {
+				ServoMotion.validateForImpedanceMode(tool);
+			}
+			else {
+				ServoMotion.validateForImpedanceMode(robot);
+			}
+		} catch (IllegalStateException e) {
+		      getLogger().info("Omitting validation failure for this sample\n"
+		              + e.getMessage());
 		}
-		else {
-			ServoMotion.validateForImpedanceMode(robot);
-		}
+
 		motion = createSmartServoMotion();
 		if (request != null) {
-			motion.setMode(buildMotionControlMode(request));
+			switch_cm = buildMotionControlMode(request);
+			motion.setMode(switch_cm);
 		}
 		else {
 			if (latestSmartServoRequest != null) {
-				motion.setMode(buildMotionControlMode(latestSmartServoRequest));
+				switch_cm = buildMotionControlMode(latestSmartServoRequest);
+				motion.setMode(switch_cm);
 			}
 			else {
-				motion.setMode(new PositionControlMode());
+				switch_cm = new PositionControlMode();
+				motion.setMode(switch_cm);
 			}
 		}
-		toolFrame.moveAsync(motion);
-		oldmotion.getRuntime().stopMotion();
+
+		// set the current joint position before activate the new control mode motion
+		try{
+			oldmotion.getRuntime().setDestination(robot.getCurrentJointPosition());
+		} catch (IllegalStateException e) {
+		      getLogger().info("failed to get the runtime of oldmotion \n"
+		              + e.getMessage());
+		}
+
+	    if (oldmotion != null) {
+	        oldmotion.getRuntime().stopMotion();
+	      }
+
+		robot.moveAsync(positionHold(switch_cm,15,TimeUnit.MILLISECONDS)); 
+
+		try {
+			toolFrame.moveAsync(motion);
+		} catch (Exception e){
+			getLogger().info("new motion activate failed!");
+			getLogger().error(e.getClass().getName() + ": " + e.getMessage());
+		}
+
+		try {
+			motion.getRuntime().setDestination(robot.getCurrentJointPosition());
+		}
+		catch (Exception e) {
+			getLogger().error(e.getClass().getName() + ": " + e.getMessage());
+			// if we switch failed, just try to block here, then we can stop robot manually?
+			configureSmartServoLock.unlock();
+			motion.getRuntime().setDestination(robot.getCurrentJointPosition());
+		}
 		
 		motion.getRuntime().activateVelocityPlanning(true); // TODO: parametrize
 		motion.getRuntime().setGoalReachedEventHandler(handler);
+
+		// set the current position again
+		try {
+			motion.getRuntime().setDestination(robot.getCurrentJointPosition());
+		}
+		catch (Exception e) {
+			getLogger().error(e.getClass().getName() + ": " + e.getMessage());
+			// if we switch failed, just try to block here, then we can stop robot manually.
+			configureSmartServoLock.unlock();
+			motion.getRuntime().setDestination(robot.getCurrentJointPosition());
+		}
 
 		configureSmartServoLock.unlock();
 	}
@@ -493,6 +554,16 @@ public class ROSSmartServo extends ROSBaseApplication {
 			}
 
 			configureSmartServoLock.unlock();
+		} else { 
+			// TODO: add set current position if possible 
+			// we should update the commanded position as the current position if no commands come in
+			// if no command is running, and the target has been reached(here still a bug).	
+			// if current control mode is impedance mode, and no more command comes in(need client give a protocol)
+			// we should set destination.
+
+			// configureSmartServoLock.lock();
+			// motion.getRuntime().setDestination(robot.getCurrentJointPosition());
+			// configureSmartServoLock.unlock();
 		}
 	}
 }
