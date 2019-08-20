@@ -44,14 +44,15 @@
         <geometry>
           <mesh filename="package://iiwa_description/meshes/iiwa7/collision/link_0.stl"/>
         </geometry>
+        <material name="Grey"/>
       </collision>
       
-      <!-- <self_collision_checking>
+      <self_collision_checking>
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
           <capsule radius="0.15" length="0.25"/>
         </geometry>
-      </self_collision_checking> -->
+      </self_collision_checking>
       
     </link>
     
@@ -88,6 +89,7 @@
         <geometry>
           <mesh filename="package://iiwa_description/meshes/iiwa7/collision/link_1.stl"/>
         </geometry>
+        <material name="Orange"/>
       </collision>
     </link>
     
@@ -124,6 +126,7 @@
         <geometry>
           <mesh filename="package://iiwa_description/meshes/iiwa7/collision/link_2.stl"/>
         </geometry>
+        <material name="Orange"/>
       </collision>
     </link>
     
@@ -161,6 +164,7 @@
         <geometry>
           <mesh filename="package://iiwa_description/meshes/iiwa7/collision/link_3.stl"/>
         </geometry>
+        <material name="Orange"/>
       </collision>
       
     </link>
@@ -199,6 +203,7 @@
         <geometry>
           <mesh filename="package://iiwa_description/meshes/iiwa7/collision/link_4.stl"/>
         </geometry>
+        <material name="Orange"/>
       </collision>
     </link>
     
@@ -236,6 +241,7 @@
         <geometry>
           <mesh filename="package://iiwa_description/meshes/iiwa7/collision/link_5.stl"/>
         </geometry>
+        <material name="Orange"/>
       </collision>
     </link>
     
@@ -273,6 +279,7 @@
         <geometry>
           <mesh filename="package://iiwa_description/meshes/iiwa7/collision/link_6.stl"/>
         </geometry>
+        <material name="Orange"/>
       </collision>
     </link>
     
@@ -310,6 +317,7 @@
         <geometry>
           <mesh filename="package://iiwa_description/meshes/iiwa7/collision/link_7.stl"/>
         </geometry>
+        <material name="Grey"/>
       </collision>
     </link>
     
