@@ -29,7 +29,8 @@ package de.tum.in.camp.kuka.ros;
 
 import org.apache.commons.logging.Log;
 
-import com.kuka.task.ITaskLogger;
+//import com.kuka.task.ITaskLogger;
+import  com.kuka.roboticsAPI.applicationModel.tasks.ITaskLogger;
 
 public class Logger {
   public static enum Level {
